@@ -1,2 +1,2 @@
 #!/bin/bash
-python e-sports.py
+python e-sports_bot.py
