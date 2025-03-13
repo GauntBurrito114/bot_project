@@ -1,1 +1,4 @@
 /.env
+/lib/
+/Scripts/
+/pyvenv.cfg/
