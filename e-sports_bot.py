@@ -1,5 +1,3 @@
-#メモ:仮想環境の有効化
-#.\e-sports_bot\Scripts\Activate.ps1
 #いっぱいコメントあるのは初心者だから許してね
 
 #ライブラリのインポート
@@ -10,11 +8,12 @@ from dotenv import load_dotenv
 import datetime #出席記録のためだけにこれインポートするのはなぁという気持ち
 import schedule
 import time
-import keep_alive#botを落とさないための処理
+#import keep_alive #botを落とさないための処理
+import requests
 
 load_dotenv()
 
-keep_alive.keep_alive()#wbeサーバーを起動
+#keep_alive.keep_alive() #wbeサーバーを起動
 
 #discord botトークン
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -96,6 +95,10 @@ async def on_message(message):
         await message.channel.send('botを停止します')
         await client.close()
         print('botを停止しました')
+        # try:
+        #     requests.post('http://127.0.0.1:8080/shutdown')
+        # except Exception as e:
+        #     print(f"Error: サーバー停止エンドポイントにアクセスできませんでした。")
 
     # 出席ロール剥奪コマンド
     if message.content == '/remove role' and message.channel.id == DEBUG_CHANNEL_ID:
