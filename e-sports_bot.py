@@ -10,10 +10,8 @@ from dotenv import load_dotenv
 import datetime #出席記録のためだけにこれインポートするのはなぁという気持ち
 import schedule
 import time
-
 load_dotenv()
 
-#環境変数の取得
 TOKEN = os.getenv("DISCORD_TOKEN")
 DEBUG_CHANNEL_ID = int(os.getenv("debug_channel_id"))
 ATTENDANCE_CONFIRMATION_CHANNEL_ID = int(os.getenv("attendance_confirmation_channel_id"))
@@ -21,7 +19,6 @@ ATTENDANCE_RECORD_CHANNEL_ID = int(os.getenv("attendance_record_channel_id"))
 ATTENDANCE_ROLE_ID = int(os.getenv("attendance_role_id"))
 ATTENDANCE_MESSAGE_ID = int(os.getenv("attendance_message_id"))
 
-#botのインスタンスを生成
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
@@ -31,13 +28,10 @@ client = discord.Client(intents=intents)
 #ロールはく奪関数の定義
 async def remove_attendance_role_from_guild(guild, attendance_role):
      
-     #サーバーのメンバーを取得
      if attendance_role:
         members = []
         async for member in guild.fetch_members(limit=None):
             members.append(member)
-        
-        #メンバーから出席ロールを剥奪
         for member in members:
             if attendance_role in member.roles:
                 try:
@@ -48,11 +42,9 @@ async def remove_attendance_role_from_guild(guild, attendance_role):
 
 #毎日0時に出席ロールを剥奪
 async def remove_attendance_role(client):
-    #サーバーと出席ロールの取得
     guild = client.guilds[0]
     attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
-    
-    #出席ロール剥奪関数の呼び出し
+
     await remove_attendance_role_from_guild(guild, attendance_role)
     channel = client.get_channel(DEBUG_CHANNEL_ID)
     await channel.send('出席ロールを全員からはく奪しました。')
@@ -116,32 +108,24 @@ async def on_message(message):
 #出席管理システム
 @client.event
 async def on_raw_reaction_add(payload):
-    
-    #出席メッセージにリアクションがついた場合
     if payload.message_id == ATTENDANCE_MESSAGE_ID and payload.emoji.name == '✅':
 
-        #サーバーとメンバーの取得
         guild = client.get_guild(payload.guild_id)
         member = guild.get_member(payload.user_id)
         channel = client.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         
         if member and not member.bot:
-            #出席記録チャンネルとロールの取得
             attendance_record_channel = client.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
             attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
-            #現在時刻の取得
             now = datetime.datetime.now()
 
-            #もし出席済みロールが既に付与されていたら
             if attendance_role in member.roles:
                 await message.remove_reaction(payload.emoji, member)
                 return
 
-            #出席記録チャンネルにメッセージを送信
             await attendance_record_channel.send(f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。')
             await member.add_roles(attendance_role)
-
             try:
                 await message.remove_reaction(payload.emoji, member)
             except discord.Forbidden:
