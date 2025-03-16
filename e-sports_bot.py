@@ -13,7 +13,6 @@ import requests
 
 load_dotenv()
 
-
 #discord botトークン
 TOKEN = os.getenv("DISCORD_TOKEN")
 #デバックチャンネルID
