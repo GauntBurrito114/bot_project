@@ -2,6 +2,7 @@
 
 #ライブラリのインポート
 import discord
+from discord import app_commands
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -34,6 +35,7 @@ intents.guilds = True
 intents.members = True
 intents.dm_messages = True
 client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
 
 #botの起動時の処理
 @client.event
@@ -56,7 +58,7 @@ async def on_ready():
     except discord.NotFound:
         print("Error: 出席確認メッセージが見つかりませんでした。")
     
-    #定期的にメッセージを送信する
+    #botの停止対策に定期的にメッセージを送信する
     user = await client.fetch_user(TARGET_USER_ID)
     if user:
         while True:
@@ -67,6 +69,8 @@ async def on_ready():
                 print(f"Error: {user.name} にメッセージを送信する際にエラーが発生しました。")
             
             await asyncio.sleep(600)
+
+    await tree.sync()
     
     #出席ロール剥奪処理のスケジューリング
     schedule.every().day.at("00:08").do(lambda: asyncio.create_task(remove_attendance_role(client)))
@@ -82,27 +86,31 @@ async def scheduler():
 @client.event
 async def on_message(message):
     if message.author.bot:
+        return 
+
+#コマンドの定義
+@tree.command(name="test", description="テストコマンドです")
+async def test_command(interaction: discord.Interaction):
+    await interaction.response.send_message("テストメッセージです")
+
+@tree.command(name="stop", description="botを停止します")
+async def stop_command(interaction: discord.Interaction):
+    if interaction.channel_id != DEBUG_CHANNEL_ID:
+        await interaction.response.send_message('このコマンドはこのチャンネルでは実行できません。')
         return
+    await interaction.response.send_message("botを停止します")
+    await client.close()
+    print('botを停止しました')
+    os._exit(0)
 
-    #テストコマンド
-    if message.content == '/test' and message.channel.id == DEBUG_CHANNEL_ID:
-        await message.channel.send('テストメッセージです')
-
-    #botの停止コマンド
-    if message.content == '/stop' and message.channel.id == DEBUG_CHANNEL_ID:
-        await message.channel.send('botを停止します')
-        await client.close()
-        print('botを停止しました')
-        os._exit(0)
-
-    # 出席ロール剥奪コマンド
-    if message.content == '/remove role' and message.channel.id == DEBUG_CHANNEL_ID:
-        #出席ロールの取得
-        attendance_role_id = message.guild.get_role(ATTENDANCE_ROLE_ID)
-        
-        #ロールはく奪関数の呼び出し
-        await remove_attendance_role_from_guild(message.guild, attendance_role_id)
-        await message.channel.send('出席ロールを剥奪しました。')
+@tree.command(name="remove_role", description="出席ロールを剥奪します")
+async def remove_role_command(interaction: discord.Interaction):
+    if interaction.channel_id != DEBUG_CHANNEL_ID:
+        await interaction.response.send_message('このコマンドはこのチャンネルでは実行できません。')
+        return
+    attendance_role = interaction.guild.get_role(ATTENDANCE_ROLE_ID)
+    await remove_attendance_role_from_guild(interaction.guild, attendance_role)
+    await interaction.response.send_message('出席ロールを剥奪しました。')
 
 #出席管理システム
 @client.event
