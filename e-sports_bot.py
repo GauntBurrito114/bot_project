@@ -8,9 +8,6 @@ import os
 from dotenv import load_dotenv
 import datetime #出席記録のためだけにこれインポートするのはなぁという気持ち
 import schedule
-import time
-import requests
-
 load_dotenv()
 
 
@@ -36,6 +33,7 @@ intents.members = True
 intents.dm_messages = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
+periodic_message_task = None
 
 #botの起動時の処理
 @client.event
@@ -58,23 +56,29 @@ async def on_ready():
     except discord.NotFound:
         print("Error: 出席確認メッセージが見つかりませんでした。")
     
-    #botの停止対策に定期的にメッセージを送信する
+    #定期的なメッセージ送信タスクを開始
     user = await client.fetch_user(TARGET_USER_ID)
     if user:
-        while True:
-            try:
-                await user.send('定期的なメッセージです。')
-                print(f'{user.name} にメッセージを送信しました')
-            except Exception as e: 
-                print(f"Error: {user.name} にメッセージを送信する際にエラーが発生しました。")
-            
-            await asyncio.sleep(600)
+            global periodic_message_task
+            periodic_message_task = asyncio.create_task(send_periodic_message(user))
 
+    #コマンドの登録
     await tree.sync()
     
     #出席ロール剥奪処理のスケジューリング
     schedule.every().day.at("00:08").do(lambda: asyncio.create_task(remove_attendance_role(client)))
     asyncio.create_task(scheduler())
+
+#定期的なメッセージの送信を非同期関数として定義
+async def send_periodic_message(user):
+    global periodic_message_task
+    while True:
+        try:
+            await user.send('定期的なメッセージです。')
+            print(f'{user.name} にメッセージを送信しました')
+        except Exception as e:
+            print(f"Error: {user.name} にメッセージを送信する際にエラーが発生しました。")
+        await asyncio.sleep(600)
 
 #スケジューリング処理
 async def scheduler():
@@ -99,6 +103,8 @@ async def stop_command(interaction: discord.Interaction):
         await interaction.response.send_message('このコマンドはこのチャンネルでは実行できません。')
         return
     await interaction.response.send_message("botを停止します")
+    if periodic_message_task:
+        periodic_message_task.cancel()
     await client.close()
     print('botを停止しました')
     os._exit(0)
