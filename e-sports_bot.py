@@ -141,29 +141,34 @@ async def members_command(interaction: discord.Interaction):
 #コマンドで特定の日時の出席者を表示
 @tree.command(name="attendance_list", description="指定された日の出席者リストを表示します")
 async def attendance_list_command(interaction: discord.Interaction, date: str):
-    if interaction.channel_id != DEBUG_CHANNEL_ID:
-        await interaction.response.send_message('このコマンドはこのチャンネルでは実行できません。')
-        return
     try:
         # 入力された日付をdatetimeオブジェクトに変換
-        target_date = datetime.datetime.strptime(date, "%Y/%m")
-        start_date = target_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end_date = (target_date.replace(month=target_date.month % 12 + 1, day=1) - datetime.timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=999999)
+        target_date = datetime.datetime.strptime(date, "%Y/%m/%d")
+        start_date = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        date_format = "%Y年%m月%d日"
     except ValueError:
-        await interaction.response.send_message("日付の指定形式が正しくありません。年/月 の形式で入力してください。")
-        return
+        try:
+            target_date = datetime.datetime.strptime(date, "%Y/%m")
+            start_date = target_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = (target_date.replace(month=target_date.month % 12 + 1, day=1) - datetime.timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=999999)
+            date_format = "%Y年%m月"
+        except ValueError:
+            await interaction.response.send_message("日付の形式が正しくありません。YYYY/MM/DD または YYYY/MM の形式で入力してください。")
+            return
 
     channel = client.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
     messages = await get_attendance_messages(channel, start_date, end_date)
     user_ids = extract_user_ids(messages)
 
-    embed = discord.Embed(title=f"**{target_date.strftime('%Y年%m日')}** の出席者リスト", color=0x00ff00)
+    embed = discord.Embed(title=f"**{target_date.strftime(date_format)}** の出席者リスト", color=0x00ff00)
 
     if user_ids:
         attendees = "\n".join([f"<@{user_id}>" for user_id in set(user_ids)])
         embed.add_field(name="出席者", value=attendees, inline=False)
     else:
         embed.description = "出席者はいませんでした。"
+
     await interaction.response.send_message(embed=embed)
 
 #出席管理システム
