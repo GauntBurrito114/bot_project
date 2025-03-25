@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import datetime
 import schedule
 import re
+import io
 load_dotenv()
 
 #discord botトークン
@@ -164,12 +165,30 @@ async def attendance_list_command(interaction: discord.Interaction, date: str):
     embed = discord.Embed(title=f"**{target_date.strftime(date_format)}** の出席者リスト", color=0x00ff00)
 
     if user_ids:
+        # ユーザーIDからユーザー名を取得
+        user_names = []
+        for user_id in set(user_ids):
+            user = interaction.guild.get_member(user_id)
+            if user:
+                user_names.append(user.display_name)  # ニックネームを使用
+            else:
+                user_names.append(f"ユーザーID: {user_id}")  # ユーザーが見つからない場合はユーザーIDを表示
+
         attendees = "\n".join([f"<@{user_id}>" for user_id in set(user_ids)])
         embed.add_field(name="出席者", value=attendees, inline=False)
+
+        # テキストで出力ボタンを追加
+        view = discord.ui.View()
+        text_output_button = discord.ui.Button(label="テキストで出力", style=discord.ButtonStyle.primary)
+        async def text_output_callback(interaction):
+            await send_attendance_list_as_text_file(interaction, user_names, target_date.strftime(date_format))
+        text_output_button.callback = text_output_callback
+        view.add_item(text_output_button)
+
+        await interaction.response.send_message(embed=embed, view=view)
     else:
         embed.description = "出席者はいませんでした。"
-
-    await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
 #出席管理システム
 @client.event
@@ -256,6 +275,20 @@ def extract_user_ids(messages):
         if match:
             user_ids.append(int(match.group(1)))
     return user_ids
+
+#出席者リストをテキストファイルとして送信する関数
+async def send_attendance_list_as_text_file(interaction, user_names, date_str):
+    if not user_names:
+        await interaction.response.send_message("出席者はいませんでした。")
+        return
+
+    text_content = "\n".join(user_names)
+    text_filename = f"attendance_list_{date_str.replace('/', '-')}.txt"
+    text_file = io.StringIO(text_content)
+
+    await interaction.response.send_message(
+        file=discord.File(text_file, filename=text_filename)
+)
 
 #botの起動
 if TOKEN is None:
