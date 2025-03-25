@@ -9,4 +9,3 @@ iniconfig==2.0.0
 packaging==24.2
 requests
 datetime
-io
