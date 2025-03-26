@@ -3,6 +3,7 @@
 #ライブラリのインポート
 import discord
 from discord import app_commands
+from discord import ui
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -12,20 +13,18 @@ import re
 import io
 load_dotenv()
 
-#discord botトークン
-TOKEN = os.getenv("DISCORD_TOKEN")
-#デバックチャンネルID
-DEBUG_CHANNEL_ID = int(os.getenv("debug_channel_id"))
-#出席確認チャンネルID
-ATTENDANCE_CONFIRMATION_CHANNEL_ID = int(os.getenv("attendance_confirmation_channel_id"))
-#出席記録チャンネルID
-ATTENDANCE_RECORD_CHANNEL_ID = int(os.getenv("attendance_record_channel_id"))
-#出席ロールID
-ATTENDANCE_ROLE_ID = int(os.getenv("attendance_role_id"))
-#出席確認メッセージID
-ATTENDANCE_MESSAGE_ID = int(os.getenv("attendance_message_id"))
-#定期的にメッセージを送信するユーザーID
-TARGET_USER_ID = int(os.getenv("target_user_id"))
+TOKEN = os.getenv("DISCORD_TOKEN")# discord botトークン
+DEBUG_CHANNEL_ID = int(os.getenv("debug_channel_id"))# デバックチャンネルID
+ATTENDANCE_CONFIRMATION_CHANNEL_ID = int(os.getenv("attendance_confirmation_channel_id"))# 出席確認チャンネルID
+ATTENDANCE_RECORD_CHANNEL_ID = int(os.getenv("attendance_record_channel_id"))# 出席記録チャンネルID
+ATTENDANCE_ROLE_ID = int(os.getenv("attendance_role_id"))# 出席ロールID
+ATTENDANCE_MESSAGE_ID = int(os.getenv("attendance_message_id"))# 出席確認メッセージID
+TARGET_USER_ID = int(os.getenv("target_user_id"))# 定期的にメッセージを送信するユーザーID
+FORTNITE_ROLE_ID = int(os.getenv("FORTNITE_ROLE_ID"))# フォートナイト部門ロール
+TOURNAMENT_ROLE_ID = int(os.getenv("TAIKAI_ROLE_ID"))# 大会部門ロール
+ENJOY_ROLE_ID = int(os.getenv("ENJOY_ROLE_ID"))# エンジョイ部門ロール
+CREATOR_ROLE_ID = int(os.getenv("CREATOR_ROLE_ID"))# クリエイター部門ロール
+
 #メンバーキャッシュ
 member_cache = {}
 
@@ -139,9 +138,21 @@ async def members_command(interaction: discord.Interaction):
     member_list = "\n".join([member.name for member in members])
     await interaction.response.send_message(f"サーバーのメンバーリスト:\n{member_list}")
 
-#コマンドで特定の日時の出席者を表示
+# 部門ロールのIDと名前の対応
+DEPARTMENT_ROLES = {
+    "フォートナイト部門": FORTNITE_ROLE_ID,
+    "大会部門": TOURNAMENT_ROLE_ID,
+    "エンジョイ部門": ENJOY_ROLE_ID,
+    "クリエイター部門": CREATOR_ROLE_ID,
+}
+
+# 出席者リストを表示するコマンド
 @tree.command(name="attendance_list", description="指定された日の出席者リストを表示します")
-async def attendance_list_command(interaction: discord.Interaction, date: str):
+async def attendance_list_command(
+    interaction: discord.Interaction,
+    date: str,
+    department: str = None,
+):
     try:
         # 入力された日付をdatetimeオブジェクトに変換
         target_date = datetime.datetime.strptime(date, "%Y/%m/%d")
@@ -155,40 +166,68 @@ async def attendance_list_command(interaction: discord.Interaction, date: str):
             end_date = (target_date.replace(month=target_date.month % 12 + 1, day=1) - datetime.timedelta(days=1)).replace(hour=23, minute=59, second=59, microsecond=999999)
             date_format = "%Y年%m月"
         except ValueError:
-            await interaction.response.send_message("日付の形式が正しくありません。YYYY/MM/DD または YYYY/MM の形式で入力してください。")
+            await interaction.response.send_message("日付の形式が正しくありません。YYYY/MM/DD またはYYYY/MM の形式で入力してください。")
             return
 
     channel = client.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
     messages = await get_attendance_messages(channel, start_date, end_date)
     user_ids = extract_user_ids(messages)
 
-    embed = discord.Embed(title=f"**{target_date.strftime(date_format)}** の出席者リスト", color=0x00ff00)
+    title = f"**{target_date.strftime(date_format)}** の出席者リスト"
+    if department:
+        title += f" ({department})"  # 部門名を埋め込みメッセージに追加
+    embed = discord.Embed(title=title, color=0x00ff00)
 
     if user_ids:
         # ユーザーIDからユーザー名を取得
         user_names = []
+        filtered_user_ids = []  # 部門でフィルタリングされたユーザーIDリスト
         for user_id in set(user_ids):
             user = interaction.guild.get_member(user_id)
             if user:
-                user_names.append(user.display_name)  # ニックネームを使用
+                if department:  # 部門が指定されている場合
+                    department_role_id = DEPARTMENT_ROLES[department]  # departmentから直接ロールIDを取得
+                    department_role = interaction.guild.get_role(department_role_id)
+                    if department_role and department_role in user.roles:
+                        user_names.append(user.display_name)
+                        filtered_user_ids.append(user_id)
+                else:  # 部門が指定されていない場合
+                    user_names.append(user.display_name)
+                    filtered_user_ids.append(user_id)
             else:
-                user_names.append(f"ユーザーID: {user_id}")  # ユーザーが見つからない場合はユーザーIDを表示
+                user_names.append(f"ユーザーID: {user_id}")
 
-        attendees = "\n".join([f"<@{user_id}>" for user_id in set(user_ids)])
-        embed.add_field(name="出席者", value=attendees, inline=False)
+        if filtered_user_ids:
+            attendees = "\n".join([f"<@{user_id}>" for user_id in set(filtered_user_ids)])
+            embed.add_field(name="出席者", value=attendees, inline=False)
 
-        # テキストで出力ボタンを追加
-        view = discord.ui.View()
-        text_output_button = discord.ui.Button(label="テキストで出力", style=discord.ButtonStyle.primary)
-        async def text_output_callback(interaction):
-            await send_attendance_list_as_text_file(interaction, user_names, target_date.strftime(date_format))
-        text_output_button.callback = text_output_callback
-        view.add_item(text_output_button)
+            # テキストで出力ボタンを追加
+            view = discord.ui.View()
+            text_output_button = discord.ui.Button(label="テキストで出力", style=discord.ButtonStyle.primary)
+            async def text_output_callback(interaction):
+                await send_attendance_list_as_text_file(interaction, user_names, target_date.strftime(date_format), department)
+            text_output_button.callback = text_output_callback
+            view.add_item(text_output_button)
 
-        await interaction.response.send_message(embed=embed, view=view)
+            await interaction.response.send_message(embed=embed, view=view)
+        else:
+            embed.description = "指定された部門の出席者はいませんでした。"
+            await interaction.response.send_message(embed=embed)
     else:
         embed.description = "出席者はいませんでした。"
         await interaction.response.send_message(embed=embed)
+
+# 選択肢の定義
+@attendance_list_command.autocomplete("department")
+async def department_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    return [
+        app_commands.Choice(name=name, value=name)
+        for name in DEPARTMENT_ROLES
+        if current.lower() in name.lower()
+    ]
 
 #出席管理システム
 @client.event
@@ -277,18 +316,22 @@ def extract_user_ids(messages):
     return user_ids
 
 #出席者リストをテキストファイルとして送信する関数
-async def send_attendance_list_as_text_file(interaction, user_names, date_str):
+async def send_attendance_list_as_text_file(interaction, user_names, date_str, department=None):
+    """出席者リストをテキストファイルとして送信する関数"""
     if not user_names:
         await interaction.response.send_message("出席者はいませんでした。")
         return
 
     text_content = "\n".join(user_names)
-    text_filename = f"attendance_list_{date_str.replace('/', '-')}.txt"
+    filename = f"attendance_list_{date_str.replace('/', '-')}"
+    if department:
+        filename += f"_{department}"  # 部門名をファイル名に追加
+    filename += ".txt"
     text_file = io.StringIO(text_content)
 
     await interaction.response.send_message(
-        file=discord.File(text_file, filename=text_filename)
-)
+        file=discord.File(text_file, filename=filename)
+    )
 
 #botの起動
 if TOKEN is None:

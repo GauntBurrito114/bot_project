@@ -1,76 +1,37 @@
-# Discord出席管理Bot
-
-このBotは、Discordサーバーでの出席管理を効率化するためのBotです。
+# Discord出席管理ボット
 
 ## 機能
 
-* 特定のメッセージへのリアクションによる出席登録
-* 毎日の出席ロール自動削除
-* 出席記録のチャンネルへの送信
-* 管理コマンド（出席ロール削除など）
+* **出席管理**: 特定のメッセージへのリアクションに基づいて出席を記録し、出席ロールを付与します。
+* **定期メッセージ**: 設定されたユーザーに定期的にメッセージを送信します。
+* **コマンド**:
+    * `/test`: テストメッセージを送信します。
+    * `/stop`: ボットを停止します（デバッグチャンネルでのみ有効）。
+    * `/remove_role`: 出席ロールを剥奪します（デバッグチャンネルでのみ有効）。
+    * `/members`: サーバーのメンバーリストを表示します（デバッグチャンネルでのみ有効）。
+    * `/attendance_list`: 指定された日の出席者リストを表示します。部門を指定して検索することも、テキストファイルで出力することも可能です。
+* **自動ロール剥奪**: 毎日00:08に出席ロールを自動的に剥奪します。
+* **メンバー管理**: サーバーへの参加/退出時にメンバーリストを更新します。
 
-## 必要な環境
+## 設定方法
 
-* Python 3.8以上
-* discord.pyライブラリ
-* python-dotenvライブラリ
-* scheduleライブラリ
-* Git
+1.  **環境変数の設定**: `.env` ファイルに以下の環境変数を設定します。
+    * `DISCORD_TOKEN`: Discordボットのトークン
+    * `debug_channel_id`: デバッグチャンネルのID
+    * `attendance_confirmation_channel_id`: 出席確認チャンネルのID
+    * `attendance_record_channel_id`: 出席記録チャンネルのID
+    * `attendance_role_id`: 出席ロールのID
+    * `attendance_message_id`: 出席確認メッセージのID
+    * `target_user_id`: 定期メッセージを送信するユーザーのID
+    * `FORTNITE_ROLE_ID`: フォートナイト部門ロールのID
+    * `TAIKAI_ROLE_ID`: 大会部門ロールのID
+    * `ENJOY_ROLE_ID`: エンジョイ部門ロールのID
+    * `CREATOR_ROLE_ID`: クリエイター部門ロールのID
+2.  **必要なライブラリのインストール**: `discord.py`, `python-dotenv`, `schedule` をインストールします。
+3.  **ボットの起動**: スクリプトを実行します。
 
-## 導入方法
+## コマンドの使用方法
 
-1.  **リポジトリをクローン:**
-
-    ```bash
-    git clone https://github.com/GauntBurrito114/bot_project
-    cd リポジトリ名
-    ```
-
-2.  **仮想環境の作成 (推奨):**
-
-    ```bash
-    python -m venv venv
-    venv\Scripts\activate
-
-3.  **必要なライブラリのインストール:**
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **.envファイルの作成:**
-
-    * `.env.example`をコピーして`.env`ファイルを作成し、必要な環境変数を設定します。
-
-        ```
-        DISCORD_TOKEN=あなたのBotトークン
-        debug_channel_id=デバッグ用チャンネルID
-        attendance_confirmation_channel_id=出席確認メッセージを送信するチャンネルID
-        attendance_record_channel_id=出席記録を送信するチャンネルID
-        attendance_role_id=出席ロールID
-        MESSAGE_ID=出席確認メッセージID
-        ```
-
-5.  **Botの起動:**
-
-    ```bash
-    python e-sport_bot.py
-    ```
-
-## 環境変数の設定
-
-* `DISCORD_TOKEN`: Discord Botのトークン。
-* `debug_channel_id`: デバッグ情報を送信するチャンネルのID。
-* `attendance_confirmation_channel_id`: 出席確認メッセージを送信するチャンネルのID。
-* `attendance_record_channel_id`: 出席記録を送信するチャンネルのID。
-* `attendance_role_id`: 出席ロールのID。
-* `MESSAGE_ID`: 出席確認メッセージのID。
-
-## 使用方法
-
-1.  Botをサーバーに招待します。
-2.  `.env`ファイルに必要な情報を設定します。
-3.  `bot.py`を実行してBotを起動します。
-4.  指定されたチャンネルに出席確認メッセージが投稿されます。
-5.  ユーザーはメッセージに指定されたリアクションを行うことで出席登録ができます。
-6.  毎日指定された時間に出席ロールが自動的に削除されます。
+* `/attendance_list 日付 (部門名)`: 指定された日の出席者リストを表示します。部門名を指定すると、その部門の出席者のみを表示します。
+    * 例: `/attendance_list 2023/10/27 大会部門`
+* `/attendance_list` の結果には「テキストで出力」ボタンが表示され、テキストファイルで結果を出力できます。
