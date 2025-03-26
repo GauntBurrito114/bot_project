@@ -1,6 +1,3 @@
-#いっぱいコメントあるのは初心者だから許してね
-
-#ライブラリのインポート
 import discord
 from discord import app_commands
 from discord import ui
@@ -11,33 +8,46 @@ import datetime
 import schedule
 import re
 import io
+from collections import defaultdict
+
 load_dotenv()
 
-TOKEN = os.getenv("DISCORD_TOKEN")# discord botトークン
-DEBUG_CHANNEL_ID = int(os.getenv("debug_channel_id"))# デバックチャンネルID
-ATTENDANCE_CONFIRMATION_CHANNEL_ID = int(os.getenv("attendance_confirmation_channel_id"))# 出席確認チャンネルID
-ATTENDANCE_RECORD_CHANNEL_ID = int(os.getenv("attendance_record_channel_id"))# 出席記録チャンネルID
-ATTENDANCE_ROLE_ID = int(os.getenv("attendance_role_id"))# 出席ロールID
-ATTENDANCE_MESSAGE_ID = int(os.getenv("attendance_message_id"))# 出席確認メッセージID
-TARGET_USER_ID = int(os.getenv("target_user_id"))# 定期的にメッセージを送信するユーザーID
-FORTNITE_ROLE_ID = int(os.getenv("FORTNITE_ROLE_ID"))# フォートナイト部門ロール
-TOURNAMENT_ROLE_ID = int(os.getenv("TAIKAI_ROLE_ID"))# 大会部門ロール
-ENJOY_ROLE_ID = int(os.getenv("ENJOY_ROLE_ID"))# エンジョイ部門ロール
-CREATOR_ROLE_ID = int(os.getenv("CREATOR_ROLE_ID"))# クリエイター部門ロール
+TOKEN = os.getenv("DISCORD_TOKEN")
+DEBUG_CHANNEL_ID = int(os.getenv("DEBUG_CHANNEL_ID"))
+ATTENDANCE_CONFIRMATION_CHANNEL_ID = int(os.getenv("ATTENDANCE_CONFIRMATION_CHANNEL_ID"))
+ATTENDANCE_RECORD_CHANNEL_ID = int(os.getenv("ATTENDANCE_RECORD_CHANNEL_ID"))
+ATTENDANCE_ROLE_ID = int(os.getenv("ATTENDANCE_ROLE_ID"))
+ATTENDANCE_MESSAGE_ID = int(os.getenv("ATTENDANCE_MESSAGE_ID"))
+TARGET_USER_ID = int(os.getenv("TARGET_USER_ID"))
+FORTNITE_ROLE_ID = int(os.getenv("FORTNITE_ROLE_ID"))
+TOURNAMENT_ROLE_ID = int(os.getenv("TOURNAMENT_ROLE_ID"))
+ENJOY_ROLE_ID = int(os.getenv("ENJOY_ROLE_ID"))
+CREATOR_ROLE_ID = int(os.getenv("CREATOR_ROLE_ID"))
 
-#メンバーキャッシュ
+# 部門ロールのIDと名前の対応
+DEPARTMENT_ROLES = {
+    "フォートナイト部門": FORTNITE_ROLE_ID,
+    "大会部門": TOURNAMENT_ROLE_ID,
+    "エンジョイ部門": ENJOY_ROLE_ID,
+    "クリエイター部門": CREATOR_ROLE_ID,
+}
+
+# メンバーキャッシュ
 member_cache = {}
+# 参加記録を保存する辞書 (ユーザーID: {累計参加回数: int, 週ごとの参加回数: {週の開始日: int}})
+attendance_history = defaultdict(lambda: {"total": 0, "weekly": defaultdict(int)})
+# データベースのファイル名
+DATABASE_FILE = "attendance_history.db"
 
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.members = True
-intents.dm_messages = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 periodic_message_task = None
 
-#botの起動時の処理
+# botの起動時の処理
 @client.event
 async def on_ready():
     print(f'{client.user} が起動しました')
@@ -50,34 +60,36 @@ async def on_ready():
         else:
             print(f"Error: サーバー {guild.name} にシステムメッセージチャンネルが設定されていません。")
 
-    #出席確認メッセージにリアクションをつける
+    # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
     try:
         message = await channel.fetch_message(ATTENDANCE_MESSAGE_ID)
         await message.add_reaction('✅')
     except discord.NotFound:
         print("Error: 出席確認メッセージが見つかりませんでした。")
-    
-    #定期的なメッセージ送信タスクを開始
+
+    # 定期的なメッセージ送信タスクを開始
     user = await client.fetch_user(TARGET_USER_ID)
     if user:
-            global periodic_message_task
-            periodic_message_task = asyncio.create_task(send_periodic_message(user))
+        global periodic_message_task
+        periodic_message_task = asyncio.create_task(send_periodic_message(user))
 
-    #コマンドの登録
+    # コマンドの登録
     await tree.sync()
-    
-    #出席ロール剥奪処理のスケジューリング
+
+    # 出席ロール剥奪処理のスケジューリング
     schedule.every().day.at("00:08").do(lambda: asyncio.create_task(remove_attendance_role(client)))
     asyncio.create_task(scheduler())
 
-#スケジューリング処理
+
+
+# スケジューリング処理
 async def scheduler():
     while True:
         schedule.run_pending()
         await asyncio.sleep(60)
 
-#定期的なメッセージの送信を非同期関数として定義
+# 定期的なメッセージの送信を非同期関数として定義
 async def send_periodic_message(user):
     global periodic_message_task
     while True:
@@ -88,13 +100,13 @@ async def send_periodic_message(user):
             print(f"Error: {user.name} にメッセージを送信する際にエラーが発生しました。")
         await asyncio.sleep(600)
 
-#メッセージ受信時の処理
+# メッセージ受信時の処理
 @client.event
 async def on_message(message):
     if message.author.bot:
-        return 
+        return
 
-#コマンドの定義
+# コマンドの定義
 @tree.command(name="test", description="テストコマンドです")
 async def test_command(interaction: discord.Interaction):
     await interaction.response.send_message("テストメッセージです")
@@ -175,23 +187,22 @@ async def attendance_list_command(
 
     title = f"**{target_date.strftime(date_format)}** の出席者リスト"
     if department:
-        title += f" ({department})"  # 部門名を埋め込みメッセージに追加
+        title += f" ({department})"
     embed = discord.Embed(title=title, color=0x00ff00)
 
     if user_ids:
-        # ユーザーIDからユーザー名を取得
         user_names = []
-        filtered_user_ids = []  # 部門でフィルタリングされたユーザーIDリスト
+        filtered_user_ids = []
         for user_id in set(user_ids):
             user = interaction.guild.get_member(user_id)
             if user:
-                if department:  # 部門が指定されている場合
-                    department_role_id = DEPARTMENT_ROLES[department]  # departmentから直接ロールIDを取得
+                if department:
+                    department_role_id = DEPARTMENT_ROLES[department]
                     department_role = interaction.guild.get_role(department_role_id)
                     if department_role and department_role in user.roles:
                         user_names.append(user.display_name)
                         filtered_user_ids.append(user_id)
-                else:  # 部門が指定されていない場合
+                else:
                     user_names.append(user.display_name)
                     filtered_user_ids.append(user_id)
             else:
@@ -201,12 +212,11 @@ async def attendance_list_command(
             attendees = "\n".join([f"<@{user_id}>" for user_id in set(filtered_user_ids)])
             embed.add_field(name="出席者", value=attendees, inline=False)
 
-            # テキストで出力ボタンを追加
             view = discord.ui.View()
             text_output_button = discord.ui.Button(label="テキストで出力", style=discord.ButtonStyle.primary)
             async def text_output_callback(interaction):
                 await send_attendance_list_as_text_file(interaction, user_names, target_date.strftime(date_format), department)
-            text_output_button.callback = text_output_callback
+            text_output_button.callback = text_output_button
             view.add_item(text_output_button)
 
             await interaction.response.send_message(embed=embed, view=view)
@@ -229,17 +239,15 @@ async def department_autocomplete(
         if current.lower() in name.lower()
     ]
 
-#出席管理システム
+# 出席管理システム
 @client.event
 async def on_raw_reaction_add(payload):
-
     if payload.message_id == ATTENDANCE_MESSAGE_ID and payload.emoji.name == '✅':
-
         guild = client.get_guild(payload.guild_id)
         member = guild.get_member(payload.user_id)
         channel = client.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-        
+
         if member and not member.bot:
             attendance_record_channel = client.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
             attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
@@ -251,12 +259,25 @@ async def on_raw_reaction_add(payload):
 
             await attendance_record_channel.send(f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。')
             await member.add_roles(attendance_role)
+
+            # 参加記録を更新
+            update_attendance_history(member.id, now)
+
+
             try:
                 await message.remove_reaction(payload.emoji, member)
             except discord.Forbidden:
                 print(f"Error: {member.name} のリアクションを削除する権限がありません。")
 
-#ロールはく奪関数の定義
+# 参加記録を更新する関数
+def update_attendance_history(user_id, attendance_time):
+    global attendance_history
+    attendance_history[user_id]["total"] += 1
+    week_start = attendance_time - datetime.timedelta(days=attendance_time.weekday())
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    attendance_history[user_id]["weekly"][week_start] += 1
+
+# ロール剥奪関数の定義
 async def remove_attendance_role_from_guild(guild, attendance_role):
     global member_cache
     if guild.id not in member_cache:
@@ -276,7 +297,7 @@ async def remove_attendance_role_from_guild(guild, attendance_role):
                 except discord.Forbidden:
                     print(f"Error: {member.name} から出席ロールを剥奪する権限がありません。")
 
-#毎日0時に出席ロールを剥奪
+# 毎日0時に出席ロールを剥奪
 async def remove_attendance_role(client):
     guild = client.guilds[0]
     attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
@@ -285,28 +306,28 @@ async def remove_attendance_role(client):
     channel = client.get_channel(DEBUG_CHANNEL_ID)
     await channel.send('出席ロールを全員からはく奪しました。')
 
-#サーバーに新しいメンバーが入った時
+# サーバーに新しいメンバーが入った時
 @client.event
 async def on_member_join(member):
     global member_cache
     if member.guild.id in member_cache:
         member_cache[member.guild.id].append(member)
 
-#サーバーからメンバーが脱退したとき
+# サーバーからメンバーが脱退したとき
 @client.event
 async def on_member_remove(member):
     global member_cache
     if member.guild.id in member_cache:
         member_cache[member.guild.id] = [m for m in member_cache[member.guild.id] if m.id != member.id]
 
-#指定された期間のメッセージを取得する関数
+# 指定された期間のメッセージを取得する関数
 async def get_attendance_messages(channel, start_date, end_date):
     messages = []
     async for message in channel.history(limit=None, after=start_date, before=end_date):
         messages.append(message)
     return messages
 
-#メッセージから出席者のユーザーIDを抽出する関数
+# メッセージから出席者のユーザーIDを抽出する関数
 def extract_user_ids(messages):
     user_ids = []
     for message in messages:
@@ -315,7 +336,7 @@ def extract_user_ids(messages):
             user_ids.append(int(match.group(1)))
     return user_ids
 
-#出席者リストをテキストファイルとして送信する関数
+# 出席者リストをテキストファイルとして送信する関数
 async def send_attendance_list_as_text_file(interaction, user_names, date_str, department=None):
     """出席者リストをテキストファイルとして送信する関数"""
     if not user_names:
@@ -325,7 +346,7 @@ async def send_attendance_list_as_text_file(interaction, user_names, date_str, d
     text_content = "\n".join(user_names)
     filename = f"attendance_list_{date_str.replace('/', '-')}"
     if department:
-        filename += f"_{department}"  # 部門名をファイル名に追加
+        filename += f"_{department}"
     filename += ".txt"
     text_file = io.StringIO(text_content)
 
@@ -333,7 +354,35 @@ async def send_attendance_list_as_text_file(interaction, user_names, date_str, d
         file=discord.File(text_file, filename=filename)
     )
 
-#botの起動
+# 参加履歴を表示するコマンド
+@tree.command(name="attendance_history", description="参加者の累計参加回数を表示します(開発中)")
+@app_commands.describe(user="参加履歴を表示するユーザー") # 追加
+async def attendance_history_command(interaction: discord.Interaction, user: discord.Member):
+    """
+    参加者の累計と週ごとの参加回数を表示するコマンド
+    """
+    channel = client.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
+    # エラーの原因となる可能性のある datetime.datetime.min を、より具体的な過去の日付に置き換える
+    start_date = datetime.datetime(2020, 1, 1)  # 例: 2020年1月1日
+    end_date = datetime.datetime.now()
+    messages = await get_attendance_messages(channel, start_date, end_date)
+    user_ids = extract_user_ids(messages)
+
+    # ユーザーIDごとの出席回数をカウント
+    user_attendance_count = defaultdict(int)
+    for user_id in user_ids:
+        user_attendance_count[user_id] += 1
+
+    target_user_id = user.id
+    total_count = user_attendance_count.get(target_user_id, 0)
+
+    embed = discord.Embed(title=f"{user.display_name} の参加記録", color=0x00ff00)
+    embed.add_field(name="累計参加回数", value=str(total_count), inline=False)
+
+    await interaction.response.send_message(embed=embed)
+
+
+# botの起動
 if TOKEN is None:
     print("Error: DISCORD_TOKEN を取得出来ませんでした。")
 else:
