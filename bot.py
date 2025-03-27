@@ -13,12 +13,12 @@ from collections import defaultdict
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-DEBUG_CHANNEL_ID = int(os.getenv("DEBUG_CHANNEL_ID"))
-ATTENDANCE_CONFIRMATION_CHANNEL_ID = int(os.getenv("ATTENDANCE_CONFIRMATION_CHANNEL_ID"))
-ATTENDANCE_RECORD_CHANNEL_ID = int(os.getenv("ATTENDANCE_RECORD_CHANNEL_ID"))
-ATTENDANCE_ROLE_ID = int(os.getenv("ATTENDANCE_ROLE_ID"))
-ATTENDANCE_MESSAGE_ID = int(os.getenv("ATTENDANCE_MESSAGE_ID"))
-TARGET_USER_ID = int(os.getenv("TARGET_USER_ID"))
+DEBUG_CHANNEL_ID = int(os.getenv("debug_channel_id"))
+ATTENDANCE_CONFIRMATION_CHANNEL_ID = int(os.getenv("attendance_confirmation_channel_id"))
+ATTENDANCE_RECORD_CHANNEL_ID = int(os.getenv("attendance_record_channel_id"))
+ATTENDANCE_ROLE_ID = int(os.getenv("attendance_role_id"))
+ATTENDANCE_MESSAGE_ID = int(os.getenv("attendance_message_id"))
+TARGET_USER_ID = int(os.getenv("target_user_id"))
 FORTNITE_ROLE_ID = int(os.getenv("FORTNITE_ROLE_ID"))
 TOURNAMENT_ROLE_ID = int(os.getenv("TOURNAMENT_ROLE_ID"))
 ENJOY_ROLE_ID = int(os.getenv("ENJOY_ROLE_ID"))
@@ -34,10 +34,6 @@ DEPARTMENT_ROLES = {
 
 # メンバーキャッシュ
 member_cache = {}
-# 参加記録を保存する辞書 (ユーザーID: {累計参加回数: int, 週ごとの参加回数: {週の開始日: int}})
-attendance_history = defaultdict(lambda: {"total": 0, "weekly": defaultdict(int)})
-# データベースのファイル名
-DATABASE_FILE = "attendance_history.db"
 
 intents = discord.Intents.default()
 intents.message_content = True
