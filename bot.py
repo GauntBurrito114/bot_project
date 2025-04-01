@@ -47,14 +47,6 @@ periodic_message_task = None
 @client.event
 async def on_ready():
     print(f'{client.user} が起動しました')
-    for guild in client.guilds:
-        if guild.system_channel:
-            try:
-                await guild.system_channel.send('Botが起動しました！')
-            except discord.Forbidden:
-                print(f"Error: サーバー {guild.name} のシステムメッセージチャンネルへの送信権限がありません。")
-        else:
-            print(f"Error: サーバー {guild.name} にシステムメッセージチャンネルが設定されていません。")
 
     # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
@@ -76,8 +68,6 @@ async def on_ready():
     # 出席ロール剥奪処理のスケジューリング
     schedule.every().day.at("00:08").do(lambda: asyncio.create_task(remove_attendance_role(client)))
     asyncio.create_task(scheduler())
-
-
 
 # スケジューリング処理
 async def scheduler():
