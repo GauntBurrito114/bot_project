@@ -35,6 +35,9 @@ DEPARTMENT_ROLES = {
 # メンバーキャッシュ
 member_cache = {}
 
+# 出席履歴のキャッシュ
+attendance_history = defaultdict(lambda: {"total": 0, "weekly": defaultdict(int)})
+
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
@@ -245,15 +248,16 @@ async def on_raw_reaction_add(payload):
 
             await attendance_record_channel.send(f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。')
             await member.add_roles(attendance_role)
-
-            # 参加記録を更新
-            update_attendance_history(member.id, now)
-
-
             try:
                 await message.remove_reaction(payload.emoji, member)
             except discord.Forbidden:
                 print(f"Error: {member.name} のリアクションを削除する権限がありません。")
+            
+            # 参加記録を更新
+            update_attendance_history(member.id, now)
+
+
+            
 
 # 参加記録を更新する関数
 def update_attendance_history(user_id, attendance_time):
