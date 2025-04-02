@@ -77,7 +77,7 @@ async def on_ready():
 async def scheduler():
     while True:
         schedule.run_pending()
-        await asyncio.sleep(60)
+        await asyncio.sleep(10)
 
 # 定期的なメッセージの送信を非同期関数として定義
 async def send_periodic_message(user):
@@ -87,7 +87,7 @@ async def send_periodic_message(user):
             print(f'{user.name} にメッセージを送信しました')
         except Exception as e:
             print(f"Error: {user.name} にメッセージを送信する際にエラーが発生しました。")
-        await asyncio.sleep(600)
+        await asyncio.sleep(180)
 
 # メッセージ受信時の処理
 @client.event
