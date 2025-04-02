@@ -10,6 +10,7 @@ import re
 import io
 from collections import defaultdict
 import web_server
+import logging
 
 load_dotenv()
 
@@ -46,10 +47,13 @@ intents.members = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
+# ログの設定
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 # botの起動時の処理
 @client.event
 async def on_ready():
-    print(f'{client.user} が起動しました')
+    logging.info(f'{client.user} が起動しました')
 
     web_server.start_web_server()
 
@@ -59,7 +63,7 @@ async def on_ready():
         message = await channel.fetch_message(ATTENDANCE_MESSAGE_ID)
         await message.add_reaction('✅')
     except discord.NotFound:
-        print("Error: 出席確認メッセージが見つかりませんでした。")
+        logging.info("Error: 出席確認メッセージが見つかりませんでした。")
 
     # 定期的なメッセージ送信タスクを開始
     user = await client.fetch_user(TARGET_USER_ID)
@@ -77,17 +81,17 @@ async def on_ready():
 async def scheduler():
     while True:
         schedule.run_pending()
-        await asyncio.sleep(10)
+        await asyncio.sleep(60)
 
 # 定期的なメッセージの送信を非同期関数として定義
 async def send_periodic_message(user):
     while True:
         try:
             await user.send('定期的なメッセージです。')
-            print(f'{user.name} にメッセージを送信しました')
+            logging.info(f'{user.name} にメッセージを送信しました')
         except Exception as e:
             print(f"Error: {user.name} にメッセージを送信する際にエラーが発生しました。")
-        await asyncio.sleep(10)
+        await asyncio.sleep(60)
 
 # メッセージ受信時の処理
 @client.event
