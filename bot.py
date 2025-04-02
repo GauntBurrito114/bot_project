@@ -87,7 +87,7 @@ async def send_periodic_message(user):
             print(f'{user.name} にメッセージを送信しました')
         except Exception as e:
             print(f"Error: {user.name} にメッセージを送信する際にエラーが発生しました。")
-        await asyncio.sleep(180)
+        await asyncio.sleep(10)
 
 # メッセージ受信時の処理
 @client.event
