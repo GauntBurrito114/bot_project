@@ -65,7 +65,6 @@ async def on_ready():
     # 定期的なメッセージ送信タスクを開始
     user = await client.fetch_user(TARGET_USER_ID)
     if user:
-        global periodic_message_task
         periodic_message_task = asyncio.create_task(send_periodic_message(user))
 
     # コマンドの登録
@@ -129,7 +128,6 @@ async def members_command(interaction: discord.Interaction):
     if interaction.channel_id != DEBUG_CHANNEL_ID:
         await interaction.response.send_message('このコマンドはこのチャンネルでは実行できません。')
         return
-    global member_cache
     guild = interaction.guild
     if guild.id not in member_cache:
         members = []
@@ -264,7 +262,6 @@ async def on_raw_reaction_add(payload):
 
 # 参加記録を更新する関数
 def update_attendance_history(user_id, attendance_time):
-    global attendance_history
     attendance_history[user_id]["total"] += 1
     week_start = attendance_time - datetime.timedelta(days=attendance_time.weekday())
     week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -272,7 +269,6 @@ def update_attendance_history(user_id, attendance_time):
 
 # ロール剥奪関数の定義
 async def remove_attendance_role_from_guild(guild, attendance_role):
-    global member_cache
     if guild.id not in member_cache:
         members = []
         async for member in guild.fetch_members(limit=None):
@@ -302,14 +298,12 @@ async def remove_attendance_role(client):
 # サーバーに新しいメンバーが入った時
 @client.event
 async def on_member_join(member):
-    global member_cache
     if member.guild.id in member_cache:
         member_cache[member.guild.id].append(member)
 
 # サーバーからメンバーが脱退したとき
 @client.event
 async def on_member_remove(member):
-    global member_cache
     if member.guild.id in member_cache:
         member_cache[member.guild.id] = [m for m in member_cache[member.guild.id] if m.id != member.id]
 
