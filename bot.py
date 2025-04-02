@@ -9,6 +9,7 @@ import schedule
 import re
 import io
 from collections import defaultdict
+import web_server
 
 load_dotenv()
 
@@ -50,6 +51,8 @@ periodic_message_task = None
 @client.event
 async def on_ready():
     print(f'{client.user} が起動しました')
+
+    web_server.start_web_server()
 
     # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
