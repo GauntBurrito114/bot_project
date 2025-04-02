@@ -11,7 +11,7 @@ import io
 from collections import defaultdict
 import web_server
 import logging
-import keep_alive
+import keep_alive # keep_alive.pyをインポート
 
 load_dotenv()
 
@@ -21,7 +21,6 @@ ATTENDANCE_CONFIRMATION_CHANNEL_ID = int(os.getenv("attendance_confirmation_chan
 ATTENDANCE_RECORD_CHANNEL_ID = int(os.getenv("attendance_record_channel_id"))
 ATTENDANCE_ROLE_ID = int(os.getenv("attendance_role_id"))
 ATTENDANCE_MESSAGE_ID = int(os.getenv("attendance_message_id"))
-TARGET_USER_ID = int(os.getenv("target_user_id"))
 FORTNITE_ROLE_ID = int(os.getenv("FORTNITE_ROLE_ID"))
 TOURNAMENT_ROLE_ID = int(os.getenv("TOURNAMENT_ROLE_ID"))
 ENJOY_ROLE_ID = int(os.getenv("ENJOY_ROLE_ID"))
@@ -57,7 +56,7 @@ async def on_ready():
     logging.info(f'{client.user} が起動しました')
 
     web_server.start_web_server()
-    keep_alive.keep_alive() 
+    asyncio.create_task(keep_alive.start_keep_alive()) # keep_alive関数を呼び出す
 
     # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
@@ -66,11 +65,6 @@ async def on_ready():
         await message.add_reaction('✅')
     except discord.NotFound:
         logging.info("Error: 出席確認メッセージが見つかりませんでした。")
-
-    # 定期的なメッセージ送信タスクを開始
-    user = await client.fetch_user(TARGET_USER_ID)
-    if user:
-        asyncio.create_task(send_periodic_message(user))
 
     # コマンドの登録
     await tree.sync()
@@ -83,16 +77,6 @@ async def on_ready():
 async def scheduler():
     while True:
         schedule.run_pending()
-        await asyncio.sleep(60)
-
-# 定期的なメッセージの送信を非同期関数として定義
-async def send_periodic_message(user):
-    while True:
-        try:
-            await user.send('定期的なメッセージです。')
-            logging.info(f'{user.name} にメッセージを送信しました')
-        except Exception as e:
-            print(f"Error: {user.name} にメッセージを送信する際にエラーが発生しました。")
         await asyncio.sleep(60)
 
 # メッセージ受信時の処理
