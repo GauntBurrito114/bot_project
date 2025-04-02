@@ -3,3 +3,4 @@ python-dotenv
 schedule
 Flask
 gunicorn
+requests
