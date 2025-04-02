@@ -45,7 +45,6 @@ intents.guilds = True
 intents.members = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
-periodic_message_task = None
 
 # botの起動時の処理
 @client.event
@@ -65,7 +64,7 @@ async def on_ready():
     # 定期的なメッセージ送信タスクを開始
     user = await client.fetch_user(TARGET_USER_ID)
     if user:
-        periodic_message_task = asyncio.create_task(send_periodic_message(user))
+        asyncio.create_task(send_periodic_message(user))
 
     # コマンドの登録
     await tree.sync()
@@ -82,7 +81,6 @@ async def scheduler():
 
 # 定期的なメッセージの送信を非同期関数として定義
 async def send_periodic_message(user):
-    global periodic_message_task
     while True:
         try:
             await user.send('定期的なメッセージです。')
@@ -108,8 +106,6 @@ async def stop_command(interaction: discord.Interaction):
         await interaction.response.send_message('このコマンドはこのチャンネルでは実行できません。')
         return
     await interaction.response.send_message("botを停止します")
-    if periodic_message_task:
-        periodic_message_task.cancel()
     await client.close()
     print('botを停止しました')
     os._exit(0)
@@ -139,14 +135,6 @@ async def members_command(interaction: discord.Interaction):
 
     member_list = "\n".join([member.name for member in members])
     await interaction.response.send_message(f"サーバーのメンバーリスト:\n{member_list}")
-
-# 部門ロールのIDと名前の対応
-DEPARTMENT_ROLES = {
-    "フォートナイト部門": FORTNITE_ROLE_ID,
-    "大会部門": TOURNAMENT_ROLE_ID,
-    "エンジョイ部門": ENJOY_ROLE_ID,
-    "クリエイター部門": CREATOR_ROLE_ID,
-}
 
 # 出席者リストを表示するコマンド
 @tree.command(name="attendance_list", description="指定された日の出席者リストを表示します")
@@ -253,12 +241,9 @@ async def on_raw_reaction_add(payload):
                 await message.remove_reaction(payload.emoji, member)
             except discord.Forbidden:
                 print(f"Error: {member.name} のリアクションを削除する権限がありません。")
-            
+
             # 参加記録を更新
             update_attendance_history(member.id, now)
-
-
-            
 
 # 参加記録を更新する関数
 def update_attendance_history(user_id, attendance_time):
@@ -367,7 +352,6 @@ async def attendance_history_command(interaction: discord.Interaction, user: dis
     embed.add_field(name="累計参加回数", value=str(total_count), inline=False)
 
     await interaction.response.send_message(embed=embed)
-
 
 # botの起動
 if TOKEN is None:
