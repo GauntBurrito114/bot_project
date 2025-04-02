@@ -11,6 +11,7 @@ import io
 from collections import defaultdict
 import web_server
 import logging
+import keep_alive
 
 load_dotenv()
 
@@ -56,6 +57,7 @@ async def on_ready():
     logging.info(f'{client.user} が起動しました')
 
     web_server.start_web_server()
+    keep_alive.keep_alive() 
 
     # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
