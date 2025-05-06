@@ -70,7 +70,7 @@ async def on_ready():
     await tree.sync()
 
     # 出席ロール剥奪処理のスケジューリング
-    schedule.every().day.at("00:08").do(lambda: asyncio.create_task(remove_attendance_role(client)))
+    schedule.every().day.at("00:00").do(lambda: asyncio.create_task(remove_attendance_role(client)))
     asyncio.create_task(scheduler())
 
 # スケジューリング処理
@@ -267,8 +267,6 @@ async def remove_attendance_role(client):
     attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
 
     await remove_attendance_role_from_guild(guild, attendance_role)
-    channel = client.get_channel(DEBUG_CHANNEL_ID)
-    await channel.send('出席ロールを全員からはく奪しました。')
 
 # サーバーに新しいメンバーが入った時
 @client.event
