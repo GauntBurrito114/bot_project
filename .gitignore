@@ -1,6 +1,6 @@
 /.env
 /lib/
 /Scripts/
-/pyvenv.cfg/
+/pyvenv.cfg
 /__pycache__/
 /keep_alive.txt

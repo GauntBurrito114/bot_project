@@ -105,9 +105,14 @@ async def remove_role_command(interaction: discord.Interaction):
     if interaction.channel_id != DEBUG_CHANNEL_ID:
         await interaction.response.send_message('このコマンドはこのチャンネルでは実行できません。')
         return
+
     attendance_role = interaction.guild.get_role(ATTENDANCE_ROLE_ID)
-    await remove_attendance_role_from_guild(interaction.guild, attendance_role)
-    await interaction.response.send_message('出席ロールを剥奪しました。')
+    failed = await remove_attendance_role_from_guild(interaction.guild, attendance_role)
+
+    if failed:
+        await interaction.response.send_message(f'ロール剥奪が一部失敗しました: {", ".join(failed)}')
+    else:
+        await interaction.response.send_message('出席ロールを全員から正常に剥奪しました。')
 
 @tree.command(name="members", description="サーバーのメンバーリストを表示します")
 async def members_command(interaction: discord.Interaction):
@@ -227,10 +232,11 @@ async def on_raw_reaction_add(payload):
 
             await attendance_record_channel.send(f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。')
             await member.add_roles(attendance_role)
+            await message.remove_reaction(payload.emoji, member)
             try:
                 await message.remove_reaction(payload.emoji, member)
             except discord.Forbidden:
-                print(f"Error: {member.name} のリアクションを削除する権限がありません。")
+                logging(f"Error: {member.name} のリアクションを削除する権限がありません。")
 
             # 参加記録を更新
             update_attendance_history(member.id, now)
@@ -244,6 +250,8 @@ def update_attendance_history(user_id, attendance_time):
 
 # ロール剥奪関数の定義
 async def remove_attendance_role_from_guild(guild, attendance_role):
+    failed_members = []
+
     if guild.id not in member_cache:
         members = []
         async for member in guild.fetch_members(limit=None):
@@ -260,13 +268,20 @@ async def remove_attendance_role_from_guild(guild, attendance_role):
                     print(f"{member.name} から出席ロールを剥奪しました。")
                 except discord.Forbidden:
                     print(f"Error: {member.name} から出席ロールを剥奪する権限がありません。")
+                    failed_members.append(member.name)
+
+    return failed_members
 
 # 毎日0時に出席ロールを剥奪
 async def remove_attendance_role(client):
     guild = client.guilds[0]
     attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
+    failed = await remove_attendance_role_from_guild(guild, attendance_role)
 
-    await remove_attendance_role_from_guild(guild, attendance_role)
+    if failed:
+        logging.warning(f"一部のユーザーのロール剥奪に失敗しました: {', '.join(failed)}")
+    else:
+        logging.info("全ユーザーから正常にロールを剥奪しました。")
 
 # サーバーに新しいメンバーが入った時
 @client.event
