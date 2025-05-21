@@ -9,9 +9,9 @@ import schedule
 import re
 import io
 from collections import defaultdict
-import web_server
+#import web_server
 import logging
-import keep_alive # keep_alive.pyをインポート
+#import keep_alive # keep_alive.pyをインポート
 
 load_dotenv()
 
@@ -55,8 +55,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 async def on_ready():
     logging.info(f'{client.user} が起動しました')
 
-    web_server.start_web_server()
-    asyncio.create_task(keep_alive.start_keep_alive()) # keep_alive関数を呼び出す
+    #web_server.start_web_server()
+    #asyncio.create_task(keep_alive.start_keep_alive()) # keep_alive関数を呼び出す
 
     # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
@@ -187,9 +187,13 @@ async def attendance_list_command(
 
             view = discord.ui.View()
             text_output_button = discord.ui.Button(label="テキストで出力", style=discord.ButtonStyle.primary)
-            async def text_output_callback(interaction):
-                await send_attendance_list_as_text_file(interaction, user_names, target_date.strftime(date_format), department)
-            text_output_button.callback = text_output_button
+
+            #修正：callbackをButtonに直接代入するのではなく、関数を定義してbuttonに明示的に登録
+            async def text_output_callback(interaction_inner):
+                await send_attendance_list_as_text_file(interaction_inner, user_names, target_date.strftime(date_format), department)
+
+            text_output_button.callback = text_output_callback  #関数を登録
+
             view.add_item(text_output_button)
 
             await interaction.response.send_message(embed=embed, view=view)
@@ -251,14 +255,12 @@ def update_attendance_history(user_id, attendance_time):
 # ロール剥奪関数の定義
 async def remove_attendance_role_from_guild(guild, attendance_role):
     failed_members = []
+    members = []
 
-    if guild.id not in member_cache:
-        members = []
-        async for member in guild.fetch_members(limit=None):
-            members.append(member)
-        member_cache[guild.id] = members
-    else:
-        members = member_cache[guild.id]
+    # 毎回最新のメンバーリストを取得してキャッシュを更新
+    async for member in guild.fetch_members(limit=None):
+        members.append(member)
+    member_cache[guild.id] = members  # キャッシュ更新
 
     if attendance_role:
         for member in members:
@@ -269,7 +271,6 @@ async def remove_attendance_role_from_guild(guild, attendance_role):
                 except discord.Forbidden:
                     print(f"Error: {member.name} から出席ロールを剥奪する権限がありません。")
                     failed_members.append(member.name)
-
     return failed_members
 
 # 毎日0時に出席ロールを剥奪
