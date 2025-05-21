@@ -1,6 +1,6 @@
 import discord
 from discord import app_commands
-from discord import ui
+from discord.ext import tasks, commands
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -25,6 +25,7 @@ FORTNITE_ROLE_ID = int(os.getenv("FORTNITE_ROLE_ID"))
 TOURNAMENT_ROLE_ID = int(os.getenv("TOURNAMENT_ROLE_ID"))
 ENJOY_ROLE_ID = int(os.getenv("ENJOY_ROLE_ID"))
 CREATOR_ROLE_ID = int(os.getenv("CREATOR_ROLE_ID"))
+guild_id = int(os.getenv("guild_id"))
 
 # 部門ロールのIDと名前の対応
 DEPARTMENT_ROLES = {
@@ -46,6 +47,8 @@ intents.guilds = True
 intents.members = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
+bot = commands.Bot(command_prefix="!", intents=intents)
+attendance_role_name = "出席"
 
 # ログの設定
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -66,8 +69,11 @@ async def on_ready():
     except discord.NotFound:
         logging.info("Error: 出席確認メッセージが見つかりませんでした。")
 
-    # コマンドの登録
-    await tree.sync()
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s).")
+    except Exception as e:
+        print(f"Error syncing commands: {e}")
 
     # 出席ロール剥奪処理のスケジューリング
     schedule.every().day.at("00:00").do(lambda: asyncio.create_task(remove_attendance_role(client)))
@@ -102,17 +108,29 @@ async def stop_command(interaction: discord.Interaction):
 
 @tree.command(name="remove_role", description="出席ロールを剥奪します")
 async def remove_role_command(interaction: discord.Interaction):
-    if interaction.channel_id != DEBUG_CHANNEL_ID:
-        await interaction.response.send_message('このコマンドはこのチャンネルでは実行できません。')
+    await interaction.response.defer()  # 先に応答を確保しておく
+
+    guild = interaction.guild
+    if guild is None:
+        await interaction.followup.send("ギルドが見つかりません。")
         return
 
-    attendance_role = interaction.guild.get_role(ATTENDANCE_ROLE_ID)
-    failed = await remove_attendance_role_from_guild(interaction.guild, attendance_role)
+    role = discord.utils.get(guild.roles, name=attendance_role_name)
+    if role is None:
+        await interaction.followup.send("出席ロールが見つかりません。")
+        return
 
-    if failed:
-        await interaction.response.send_message(f'ロール剥奪が一部失敗しました: {", ".join(failed)}')
-    else:
-        await interaction.response.send_message('出席ロールを全員から正常に剥奪しました。')
+    count = 0
+    for member in guild.members:
+        if role in member.roles:
+            try:
+                await member.remove_roles(role, reason="出席ロール一括剥奪")
+                count += 1
+            except Exception as e:
+                print(f"{member.display_name} からロールを削除できませんでした: {e}")
+
+    await interaction.followup.send(f"出席ロールを {count} 人から正常に剥奪しました。")
+
 
 @tree.command(name="members", description="サーバーのメンバーリストを表示します")
 async def members_command(interaction: discord.Interaction):
