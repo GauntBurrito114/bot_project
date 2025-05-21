@@ -9,9 +9,9 @@ import schedule
 import re
 import io
 from collections import defaultdict
-#import web_server
+import web_server
 import logging
-#import keep_alive # keep_alive.pyをインポート
+import keep_alive # keep_alive.pyをインポート
 
 load_dotenv()
 
@@ -55,8 +55,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 async def on_ready():
     logging.info(f'{client.user} が起動しました')
 
-    #web_server.start_web_server()
-    #asyncio.create_task(keep_alive.start_keep_alive()) # keep_alive関数を呼び出す
+    web_server.start_web_server()
+    asyncio.create_task(keep_alive.start_keep_alive()) # keep_alive関数を呼び出す
 
     # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
@@ -257,10 +257,10 @@ async def remove_attendance_role_from_guild(guild, attendance_role):
     failed_members = []
     members = []
 
-    # 毎回最新のメンバーリストを取得してキャッシュを更新
+    # 修正:毎回最新のメンバーリストを取得してキャッシュを更新
     async for member in guild.fetch_members(limit=None):
         members.append(member)
-    member_cache[guild.id] = members  # キャッシュ更新
+    member_cache[guild.id] = members
 
     if attendance_role:
         for member in members:
