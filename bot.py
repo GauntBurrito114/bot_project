@@ -48,7 +48,6 @@ intents.members = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 bot = commands.Bot(command_prefix="!", intents=intents)
-attendance_role_name = "出席"
 
 # ログの設定
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -115,7 +114,7 @@ async def remove_role_command(interaction: discord.Interaction):
         await interaction.followup.send("ギルドが見つかりません。")
         return
 
-    role = discord.utils.get(guild.roles, name=attendance_role_name)
+    role = discord.utils.get(guild.roles, ATTENDANCE_ROLE_ID)
     if role is None:
         await interaction.followup.send("出席ロールが見つかりません。")
         return
