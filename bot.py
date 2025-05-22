@@ -5,13 +5,12 @@ import asyncio
 import os
 from dotenv import load_dotenv
 import datetime
-import schedule
 import re
 import io
 from collections import defaultdict
 import web_server
 import logging
-import keep_alive # keep_alive.pyをインポート
+import keep_alive
 
 load_dotenv()
 
@@ -47,7 +46,6 @@ intents.guilds = True
 intents.members = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
-bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ログの設定
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -69,20 +67,30 @@ async def on_ready():
         logging.info("Error: 出席確認メッセージが見つかりませんでした。")
 
     try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s).")
+        synced = await tree.sync()
+        logging.info(f"Synced {len(synced)} command(s).")
     except Exception as e:
-        print(f"Error syncing commands: {e}")
+        logging.error(f"コマンドの同期中にエラーが発生しました: {e}")
 
-    # 出席ロール剥奪処理のスケジューリング
-    schedule.every().day.at("00:00").do(lambda: asyncio.create_task(remove_attendance_role(client)))
-    asyncio.create_task(scheduler())
+    asyncio.create_task(midnight_task_loop())
 
-# スケジューリング処理
-async def scheduler():
+async def midnight_task_loop():
+    tz_jst = datetime.timezone(datetime.timedelta(hours=9))
     while True:
-        schedule.run_pending()
-        await asyncio.sleep(60)
+        now = datetime.datetime.now(tz_jst)
+        # 翌日のJST 0:00
+        next_midnight = (now + datetime.timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        wait_seconds = (next_midnight - now).total_seconds()
+        logging.info(f"次回ロール剥奪まで待機: {wait_seconds} 秒")
+        await asyncio.sleep(wait_seconds)
+
+        try:
+            await call_remove_attendance_roles()
+        except Exception as e:
+            logging.error(f"ロールのはく奪中にエラーが発生しました: {e}")
+
 
 # メッセージ受信時の処理
 @client.event
@@ -102,34 +110,8 @@ async def stop_command(interaction: discord.Interaction):
         return
     await interaction.response.send_message("botを停止します")
     await client.close()
-    print('botを停止しました')
+    logging.info('botを停止しました')
     os._exit(0)
-
-@tree.command(name="remove_role", description="出席ロールを剥奪します")
-async def remove_role_command(interaction: discord.Interaction):
-    await interaction.response.defer()  # 先に応答を確保しておく
-
-    guild = interaction.guild
-    if guild is None:
-        await interaction.followup.send("ギルドが見つかりません。")
-        return
-
-    role = discord.utils.get(guild.roles, ATTENDANCE_ROLE_ID)
-    if role is None:
-        await interaction.followup.send("出席ロールが見つかりません。")
-        return
-
-    count = 0
-    for member in guild.members:
-        if role in member.roles:
-            try:
-                await member.remove_roles(role, reason="出席ロール一括剥奪")
-                count += 1
-            except Exception as e:
-                print(f"{member.display_name} からロールを削除できませんでした: {e}")
-
-    await interaction.followup.send(f"出席ロールを {count} 人から正常に剥奪しました。")
-
 
 @tree.command(name="members", description="サーバーのメンバーリストを表示します")
 async def members_command(interaction: discord.Interaction):
@@ -221,6 +203,20 @@ async def attendance_list_command(
         embed.description = "出席者はいませんでした。"
         await interaction.response.send_message(embed=embed)
 
+@tree.command(name="remove_role",description="出席ロールをサーバー全員から剥奪します")
+async def remove_role_command(interaction: discord.Interaction):
+    if interaction.channel_id != DEBUG_CHANNEL_ID:
+        await interaction.response.send_message('このコマンドはこのチャンネルでは実行できません。', ephemeral=True)
+        return
+
+    await interaction.response.send_message("出席ロールの剥奪を開始します…")
+    try:
+        await call_remove_attendance_roles()
+        await interaction.followup.send("出席ロールの剥奪が完了しました。")
+    except Exception as e:
+        logging.error(f"/remove_role 実行中に例外発生: {e}")
+        await interaction.followup.send("エラーが発生しました。ログを確認してください。")
+
 # 選択肢の定義
 @attendance_list_command.autocomplete("department")
 async def department_autocomplete(
@@ -248,16 +244,16 @@ async def on_raw_reaction_add(payload):
             now = datetime.datetime.now()
 
             if attendance_role in member.roles:
-                await message.remove_reaction(payload.emoji, member)
                 return
 
             await attendance_record_channel.send(f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。')
             await member.add_roles(attendance_role)
             await message.remove_reaction(payload.emoji, member)
+
             try:
                 await message.remove_reaction(payload.emoji, member)
             except discord.Forbidden:
-                logging(f"Error: {member.name} のリアクションを削除する権限がありません。")
+                logging.error(f"Error: {member.name} のリアクションを削除する権限がありません。")
 
             # 参加記録を更新
             update_attendance_history(member.id, now)
@@ -268,38 +264,6 @@ def update_attendance_history(user_id, attendance_time):
     week_start = attendance_time - datetime.timedelta(days=attendance_time.weekday())
     week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
     attendance_history[user_id]["weekly"][week_start] += 1
-
-# ロール剥奪関数の定義
-async def remove_attendance_role_from_guild(guild, attendance_role):
-    failed_members = []
-    members = []
-
-    # 修正:毎回最新のメンバーリストを取得してキャッシュを更新
-    async for member in guild.fetch_members(limit=None):
-        members.append(member)
-    member_cache[guild.id] = members
-
-    if attendance_role:
-        for member in members:
-            if attendance_role in member.roles:
-                try:
-                    await member.remove_roles(attendance_role)
-                    print(f"{member.name} から出席ロールを剥奪しました。")
-                except discord.Forbidden:
-                    print(f"Error: {member.name} から出席ロールを剥奪する権限がありません。")
-                    failed_members.append(member.name)
-    return failed_members
-
-# 毎日0時に出席ロールを剥奪
-async def remove_attendance_role(client):
-    guild = client.guilds[0]
-    attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
-    failed = await remove_attendance_role_from_guild(guild, attendance_role)
-
-    if failed:
-        logging.warning(f"一部のユーザーのロール剥奪に失敗しました: {', '.join(failed)}")
-    else:
-        logging.info("全ユーザーから正常にロールを剥奪しました。")
 
 # サーバーに新しいメンバーが入った時
 @client.event
@@ -347,13 +311,34 @@ async def send_attendance_list_as_text_file(interaction, user_names, date_str, d
         file=discord.File(text_file, filename=filename)
     )
 
+# ロールはく奪関数
+async def call_remove_attendance_roles():
+    guild = client.get_guild(guild_id)
+    if guild is None:
+        logging.error(f"Guild {guild_id} が見つかりません")
+        return
+
+    role = guild.get_role(ATTENDANCE_ROLE_ID)
+    if role is None:
+        logging.error(f"Role {ATTENDANCE_ROLE_ID} が見つかりません")
+        return
+
+    removed_count = 0
+    for member in guild.members:
+        if role in member.roles and not member.bot:
+            try:
+                await member.remove_roles(role)
+                removed_count += 1
+            except Exception as e:
+                logging.error(f"{member} からロール剥奪中にエラー: {e}")
+
+    logging.info(f"出席ロールを剥奪しました。対象メンバー数: {removed_count}")
+
 # 参加履歴を表示するコマンド
 @tree.command(name="attendance_history", description="参加者の累計参加回数を表示します(開発中)")
 @app_commands.describe(user="参加履歴を表示するユーザー") # 追加
 async def attendance_history_command(interaction: discord.Interaction, user: discord.Member):
-    """
-    参加者の累計と週ごとの参加回数を表示するコマンド
-    """
+    
     channel = client.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
     # エラーの原因となる可能性のある datetime.datetime.min を、より具体的な過去の日付に置き換える
     start_date = datetime.datetime(2020, 1, 1)  # 例: 2020年1月1日
@@ -376,6 +361,6 @@ async def attendance_history_command(interaction: discord.Interaction, user: dis
 
 # botの起動
 if TOKEN is None:
-    print("Error: DISCORD_TOKEN を取得出来ませんでした。")
+    logging.error("Error: DISCORD_TOKEN を取得出来ませんでした。")
 else:
     client.run(TOKEN)
