@@ -11,6 +11,7 @@ from collections import defaultdict
 import web_server
 import logging
 import keep_alive
+from flask import Flask
 
 load_dotenv()
 
@@ -46,6 +47,7 @@ intents.guilds = True
 intents.members = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
+app = Flask(__name__)
 
 # ログの設定
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
