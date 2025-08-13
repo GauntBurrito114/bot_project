@@ -59,6 +59,12 @@ async def on_ready():
     web_server.start_web_server()
     asyncio.create_task(keep_alive.start_keep_alive()) # keep_alive関数を呼び出す
 
+    if os.getenv("RENDER_EXTERNAL_URL"):
+        asyncio.create_task(keep_alive.start_keep_alive())
+    else:
+        logging.warning("RENDER_EXTERNAL_URL が設定されていないため keep_alive をスキップします。")
+
+
     # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
     try:
