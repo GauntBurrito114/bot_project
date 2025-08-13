@@ -56,8 +56,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 async def on_ready():
     logging.info(f'{client.user} が起動しました')
 
-    #web_server.start_web_server()
-    #asyncio.create_task(keep_alive.start_keep_alive()) # keep_alive関数を呼び出す
+    web_server.start_web_server()
+    asyncio.create_task(keep_alive.start_keep_alive()) # keep_alive関数を呼び出す
 
     # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
