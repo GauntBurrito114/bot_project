@@ -12,6 +12,7 @@ import web_server
 import logging
 import keep_alive
 from flask import Flask
+import schedule
 
 load_dotenv()
 
@@ -79,6 +80,7 @@ async def on_ready():
     except Exception as e:
         logging.error(f"コマンドの同期中にエラーが発生しました: {e}")
 
+    schedule.every().day.at("00:00").do(lambda: asyncio.create_task(call_remove_attendance_roles(client)))
     asyncio.create_task(midnight_task_loop())
 
 async def midnight_task_loop():
