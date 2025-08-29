@@ -58,21 +58,20 @@ async def on_ready():
     logging.info(f'{client.user} が起動しました')
 
     web_server.start_web_server()
-    asyncio.create_task(keep_alive.start_keep_alive()) # keep_alive関数を呼び出す
-
     if os.getenv("RENDER_EXTERNAL_URL"):
         asyncio.create_task(keep_alive.start_keep_alive())
     else:
         logging.warning("RENDER_EXTERNAL_URL が設定されていないため keep_alive をスキップします。")
 
-
     # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
-    try:
-        message = await channel.fetch_message(ATTENDANCE_MESSAGE_ID)
-        await message.add_reaction('✅')
-    except discord.NotFound:
-        logging.info("Error: 出席確認メッセージが見つかりませんでした。")
+    if not hasattr(client, "reaction_added"):
+        try:
+            message = await channel.fetch_message(ATTENDANCE_MESSAGE_ID)
+            await message.add_reaction('✅')
+            client.reaction_added = True
+        except discord.NotFound:
+            logging.info("出席確認メッセージが見つかりませんでした。")
 
     try:
         synced = await tree.sync()
@@ -257,15 +256,11 @@ async def on_raw_reaction_add(payload):
 
             await attendance_record_channel.send(f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。')
             await member.add_roles(attendance_role)
-            await message.remove_reaction(payload.emoji, member)
 
             try:
                 await message.remove_reaction(payload.emoji, member)
             except discord.Forbidden:
                 logging.error(f"Error: {member.name} のリアクションを削除する権限がありません。")
-
-            # 参加記録を更新
-            update_attendance_history(member.id, now)
 
 # 参加記録を更新する関数
 def update_attendance_history(user_id, attendance_time):
@@ -338,9 +333,9 @@ async def call_remove_attendance_roles():
             try:
                 await member.remove_roles(role)
                 removed_count += 1
+                await asyncio.sleep(5)  # 5秒間隔で処理
             except Exception as e:
                 logging.error(f"{member} からロール剥奪中にエラー: {e}")
-
     logging.info(f"出席ロールを剥奪しました。対象メンバー数: {removed_count}")
 
 # 参加履歴を表示するコマンド
