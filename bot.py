@@ -63,7 +63,6 @@ async def on_ready():
     else:
         logging.warning("RENDER_EXTERNAL_URL が設定されていないため keep_alive をスキップします。")
 
-    # 出席確認メッセージにリアクションをつける
     channel = client.get_channel(ATTENDANCE_CONFIRMATION_CHANNEL_ID)
     if not hasattr(client, "reaction_added"):
         try:
@@ -72,25 +71,11 @@ async def on_ready():
             client.reaction_added = True
         except discord.NotFound:
             logging.info("出席確認メッセージが見つかりませんでした。")
-        
-        for reaction in message.reactions:
+    for reaction in message.reactions:
             if reaction.emoji == '✅':
                 async for user in reaction.users():
-                    if not user.bot:  # BOTはスキップ
-                        guild = message.guild
-                        member = guild.get_member(user.id)
-                        if member:
-                            # on_raw_reaction_add と同じ処理を呼び出す
-                            attendance_record_channel = guild.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
-                            attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
-                            now = datetime.datetime.now()
-
-                            if attendance_role not in member.roles:
-                                await attendance_record_channel.send(
-                                    f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。(再検出)'
-                                )
-                                await member.add_roles(attendance_role)
-
+                    member = message.guild.get_member(user.id)
+                    await handle_attendance_reaction(message.guild, member, message, reaction.emoji)
     try:
         synced = await tree.sync()
         logging.info(f"Synced {len(synced)} command(s).")
@@ -116,9 +101,6 @@ async def midnight_task_loop():
             await call_remove_attendance_roles()
         except Exception as e:
             logging.error(f"ロールのはく奪中にエラーが発生しました: {e}")
-
-
-
 
 # メッセージ受信時の処理
 @client.event
@@ -260,27 +242,12 @@ async def department_autocomplete(
 # 出席管理システム
 @client.event
 async def on_raw_reaction_add(payload):
-    if payload.message_id == ATTENDANCE_MESSAGE_ID and payload.emoji.name == '✅':
+    if payload.message_id == ATTENDANCE_MESSAGE_ID:
         guild = client.get_guild(payload.guild_id)
         member = guild.get_member(payload.user_id)
         channel = client.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-
-        if member and not member.bot:
-            attendance_record_channel = client.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
-            attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
-            now = datetime.datetime.now()
-
-            if attendance_role in member.roles:
-                return
-
-            await attendance_record_channel.send(f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。')
-            await member.add_roles(attendance_role)
-
-            try:
-                await message.remove_reaction(payload.emoji, member)
-            except discord.Forbidden:
-                logging.error(f"Error: {member.name} のリアクションを削除する権限がありません。")
+        await handle_attendance_reaction(guild, member, message, payload.emoji.name)
 
 # 参加記録を更新する関数
 def update_attendance_history(user_id, attendance_time):
@@ -382,6 +349,30 @@ async def attendance_history_command(interaction: discord.Interaction, user: dis
     embed.add_field(name="累計参加回数", value=str(total_count), inline=False)
 
     await interaction.response.send_message(embed=embed)
+
+# 出席確認メッセージのリアクション処理
+async def handle_attendance_reaction(guild, member, message, emoji):
+    if emoji != '✅':
+        return
+    if member is None or member.bot:
+        return
+
+    attendance_record_channel = guild.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
+    attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
+    now = datetime.datetime.now()
+
+    if attendance_role in member.roles:
+        return
+
+    await attendance_record_channel.send(
+        f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。'
+    )
+    await member.add_roles(attendance_role)
+
+    try:
+        await message.remove_reaction(emoji, member)
+    except discord.Forbidden:
+        logging.error(f"Error: {member.name} のリアクションを削除する権限がありません。")
 
 # botの起動
 if TOKEN is None:
