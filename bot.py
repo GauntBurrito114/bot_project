@@ -72,6 +72,24 @@ async def on_ready():
             client.reaction_added = True
         except discord.NotFound:
             logging.info("出席確認メッセージが見つかりませんでした。")
+        
+        for reaction in message.reactions:
+            if reaction.emoji == '✅':
+                async for user in reaction.users():
+                    if not user.bot:  # BOTはスキップ
+                        guild = message.guild
+                        member = guild.get_member(user.id)
+                        if member:
+                            # on_raw_reaction_add と同じ処理を呼び出す
+                            attendance_record_channel = guild.get_channel(ATTENDANCE_RECORD_CHANNEL_ID)
+                            attendance_role = guild.get_role(ATTENDANCE_ROLE_ID)
+                            now = datetime.datetime.now()
+
+                            if attendance_role not in member.roles:
+                                await attendance_record_channel.send(
+                                    f'{member.mention} が **{now.strftime("%Y年 %m月 %d日 %H:%M")}** に出席しました。(再検出)'
+                                )
+                                await member.add_roles(attendance_role)
 
     try:
         synced = await tree.sync()
@@ -98,6 +116,8 @@ async def midnight_task_loop():
             await call_remove_attendance_roles()
         except Exception as e:
             logging.error(f"ロールのはく奪中にエラーが発生しました: {e}")
+
+
 
 
 # メッセージ受信時の処理
